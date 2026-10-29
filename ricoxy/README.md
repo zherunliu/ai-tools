@@ -36,7 +36,7 @@ Both Flash and Pro use the following settings, including after switching between
 | --- | --- |
 | Thinking effort | `max` |
 | Context window | 1,048,576 tokens |
-| Auto-compact window | 1,048,576 tokens, before output reservation and client buffers |
+| Auto-compact window | 1,000,000 tokens, before output reservation and client buffers |
 | Maximum output per request | 128,000 tokens |
 
 DeepSeek supports up to 393,216 output tokens, but Claude Code caps unrecognized model IDs at 128,000. Setting a larger output value does not raise that client cap. Input and generated tokens share the context window; increasing the output budget reduces the space available for conversation history. These are limits, not guaranteed response lengths.

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Precision & Simplicity"
+  short_description: "Deliver accurate, restrained code and documentation with KISS"
+  default_prompt: "Use $precise-minimal to complete this code or documentation task with accuracy, restraint, and KISS principles."
+policy:
+  allow_implicit_invocation: false

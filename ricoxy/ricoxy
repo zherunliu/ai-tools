@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: ./ricoxy [flash|pro] [Claude Code arguments...]
+
+  ./ricoxy                  Use Flash
+  ./ricoxy pro              Use Pro
+  ./ricoxy flash --continue Continue a session with Flash
+  ./ricoxy pro -p "Explain this project"
+
+Set DEEPSEEK_API_KEY before launching.
+In a session, use /model sonnet for Flash or /model opus for Pro.
+Both modes use max effort, a 1,048,576-token context window, and a
+128,000-token output limit (Claude Code's cap for custom models).
+EOF
+}
+
+mode=flash
+case "${1:-}" in
+  flash|pro) mode=$1; shift ;;
+  -h|--help) usage; exit 0 ;;
+  ""|-*) ;;
+  *) printf 'Unsupported mode: %s (choose flash or pro)\n' "$1" >&2; exit 2 ;;
+esac
+
+if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
+  printf 'Set DEEPSEEK_API_KEY before launching.\n' >&2
+  exit 1
+fi
+
+if ! command -v claude >/dev/null 2>&1; then
+  printf 'claude was not found. Install Claude Code and add it to PATH.\n' >&2
+  exit 1
+fi
+
+case "$mode" in
+  flash) model=deepseek-flash ;;
+  pro) model=deepseek-v4-pro ;;
+esac
+
+# These changes belong only to the launcher and its child process.
+unset ANTHROPIC_API_KEY
+unset CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
+unset CLAUDE_CODE_SUBAGENT_MODEL
+
+export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
+export ANTHROPIC_AUTH_TOKEN="$DEEPSEEK_API_KEY"
+# Command-line settings override stale model mappings in user/project settings.
+# Keep credentials in the environment, never in command-line arguments.
+settings=$(cat <<EOF
+{
+  "model": "$model",
+  "modelPicker": {
+    "replaceBuiltInOptions": true,
+    "options": [
+      {"model": "deepseek-flash", "label": "DeepSeek Flash", "description": "Text + images | 1M context | Max effort"},
+      {"model": "deepseek-v4-pro", "label": "DeepSeek Pro", "description": "Text only | 1M context | Max effort"}
+    ]
+  },
+  "env": {
+    "ANTHROPIC_MODEL": "$model",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-flash",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-flash",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-v4-pro",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES": "effort,max_effort,thinking",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES": "effort,max_effort,thinking",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES": "effort,max_effort,thinking",
+    "CLAUDE_CODE_EFFORT_LEVEL": "max",
+    "CLAUDE_CODE_DISABLE_THINKING": "1",
+    "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "1048576",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000"
+  }
+}
+EOF
+)
+# DeepSeek enables thinking by default and uses output_config.effort.
+# It ignores thinking.budget_tokens, so omit Claude-specific thinking settings.
+unset MAX_THINKING_TOKENS
+exec claude --settings "$settings" --model "$model" "$@"
